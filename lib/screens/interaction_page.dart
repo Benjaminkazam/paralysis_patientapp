@@ -21,23 +21,21 @@ class _InteractionPageState extends State<InteractionPage> {
   final Map<String, Map<String, dynamic>> _fingerConfigs = {
     'index': {
       'color': const Color(0xFF2196F3), // Blue for food
-      'icon': Icons.restaurant_menu,
-      'action': 'Need food',
+      'icon': Icons.restaurant,
+      'action': 'Need Food and Water',
+      'description': 'Raise index finger for food or drink needs',
     },
     'middle': {
-      'color': const Color(0xFF00BCD4), // Cyan for water
-      'icon': Icons.water_drop,
-      'action': 'Need Water',
-    },
-    'ring': {
       'color': const Color(0xFFE91E63), // Pink for medical
       'icon': Icons.medical_services,
-      'action': 'Need Nurse or Medicine',
+      'action': 'Need Nurse/Medicine',
+      'description': 'Raise middle finger for medical assistance',
     },
-    'pinky': {
+    'ring': {
       'color': const Color(0xFF9C27B0), // Purple for assistance
       'icon': Icons.wc,
-      'action': 'Need Assistance for bathroom',
+      'action': 'Bathroom Assistance',
+      'description': 'Raise ring finger for bathroom needs',
     },
   };
 
@@ -135,41 +133,53 @@ class _InteractionPageState extends State<InteractionPage> {
                   )
                 : null,
           ),
-          child: ListTile(
-            leading: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: fingerColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: fingerColor.withOpacity(0.2),
+          child: Column(
+            children: [
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: fingerColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: fingerColor.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Icon(
+                    config['icon'] as IconData,
+                    color: fingerColor,
+                    size: 32,
+                  ),
+                ),
+                title: Text(
+                  '$finger Finger',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: isActive ? fingerColor : null,
+                  ),
+                ),
+                subtitle: Text(
+                  config['action'] as String,
+                  style: TextStyle(
+                    color:
+                        isActive ? fingerColor : fingerColor.withOpacity(0.7),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-              child: Icon(
-                config['icon'] as IconData,
-                color: fingerColor,
-                size: 32,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Text(
+                  config['description'] as String,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.secondary,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
               ),
-            ),
-            title: Text(
-              '$finger Finger',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-                color: isActive ? fingerColor : null,
-              ),
-            ),
-            subtitle: Text(
-              config['action'] as String,
-              style: TextStyle(
-                color: isActive ? fingerColor : fingerColor.withOpacity(0.7),
-              ),
-            ),
-            trailing: Icon(
-              Icons.arrow_forward_ios,
-              color: fingerColor.withOpacity(0.5),
-              size: 16,
-            ),
+            ],
           ),
         ),
       ),
@@ -211,11 +221,34 @@ class _InteractionPageState extends State<InteractionPage> {
           // Instructions text
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Move your fingers as indicated below to communicate:',
-              style: TextStyle(
-                fontSize: 16,
-                color: Theme.of(context).colorScheme.secondary,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.warning_rounded,
+                    color: Theme.of(context).colorScheme.error,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'EMERGENCY MODE activates automatically when multiple fingers are raised!',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -227,18 +260,6 @@ class _InteractionPageState extends State<InteractionPage> {
                 _buildFingerMovementCard('Index'),
                 _buildFingerMovementCard('Middle'),
                 _buildFingerMovementCard('Ring'),
-                _buildFingerMovementCard('Pinky'),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Note: Moving multiple fingers simultaneously will trigger an emergency alert',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontStyle: FontStyle.italic,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),

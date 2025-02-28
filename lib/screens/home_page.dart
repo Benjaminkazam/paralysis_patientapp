@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/vital_data.dart';
+import 'dart:math' as math;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -8,17 +9,87 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+  late final AnimationController _heartBeatController;
+  late final AnimationController _temperatureController;
+  late final AnimationController _oxygenController;
+
   final VitalData _dummyData = VitalData(
     heartRate: 75,
-    bloodPressure: 120,
     temperature: 37,
     oxygenLevel: 98,
     movementStatus: "Stable",
   );
 
-  Widget _buildVitalCard(
-      String title, String value, String unit, IconData icon, Color iconColor) {
+  // Add vital sign thresholds
+  static const Map<String, Map<String, double>> _vitalThresholds = {
+    'heartRate': {'min': 60, 'max': 100},
+    'temperature': {'min': 36.1, 'max': 37.2},
+    'oxygenLevel': {'min': 95, 'max': 100},
+  };
+
+  bool _isVitalSignNormal(String vitalType, double value) {
+    final threshold = _vitalThresholds[vitalType]!;
+    return value >= threshold['min']! && value <= threshold['max']!;
+  }
+
+  bool get _isEmergencyState {
+    return !_isVitalSignNormal('heartRate', _dummyData.heartRate) &&
+        !_isVitalSignNormal('temperature', _dummyData.temperature) &&
+        !_isVitalSignNormal('oxygenLevel', _dummyData.oxygenLevel);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _heartBeatController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _temperatureController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+
+    _oxygenController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _heartBeatController.dispose();
+    _temperatureController.dispose();
+    _oxygenController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildAnimatedIcon(
+      IconData icon, Color color, AnimationController controller) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: 1.0 + controller.value * 0.2,
+          child: Icon(
+            icon,
+            size: 64, // Increased from 48 to 64
+            color: color.withOpacity(0.5 + controller.value * 0.5),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildVitalCard(String title, String value, String unit, IconData icon,
+      Color iconColor, AnimationController controller, String vitalType) {
+    final double numValue = double.parse(value);
+    final bool isNormal = _isVitalSignNormal(vitalType, numValue);
+    final Color displayColor =
+        isNormal ? iconColor : Theme.of(context).colorScheme.error;
+
     return Card(
       elevation: 3,
       child: Container(
@@ -27,34 +98,37 @@ class _HomePageState extends State<HomePage> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              iconColor.withOpacity(0.1),
+              displayColor.withOpacity(0.1),
               Colors.white,
             ],
           ),
           borderRadius: BorderRadius.circular(12),
+          border: !isNormal
+              ? Border.all(
+                  color: Theme.of(context).colorScheme.error,
+                  width: 2,
+                )
+              : null,
         ),
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16), // Increased from 12 to 16
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(50),
+                color: displayColor.withOpacity(0.1),
+                borderRadius:
+                    BorderRadius.circular(60), // Increased from 50 to 60
               ),
-              child: Icon(
-                icon,
-                size: 48, // Increased icon size
-                color: iconColor,
-              ),
+              child: _buildAnimatedIcon(icon, displayColor, controller),
             ),
             const SizedBox(height: 12),
             Text(
               title,
               style: TextStyle(
                 fontSize: 16,
-                color: iconColor.withOpacity(0.8),
+                color: displayColor.withOpacity(0.8),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -66,9 +140,9 @@ class _HomePageState extends State<HomePage> {
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 28, // Increased value size
+                    fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: iconColor,
+                    color: displayColor,
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -76,13 +150,50 @@ class _HomePageState extends State<HomePage> {
                   unit,
                   style: TextStyle(
                     fontSize: 14,
-                    color: iconColor.withOpacity(0.7),
+                    color: displayColor.withOpacity(0.7),
                   ),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmergencyWarning() {
+    if (!_isEmergencyState) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.error,
+          width: 2,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            color: Theme.of(context).colorScheme.error,
+            size: 32,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              'CRITICAL: All vital signs are outside normal range!\nImmediate medical attention required.',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -108,6 +219,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             const Text('Vitals Monitor',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            _buildEmergencyWarning(),
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -121,28 +233,27 @@ class _HomePageState extends State<HomePage> {
                   _dummyData.heartRate.toString(),
                   'bpm',
                   Icons.favorite_rounded,
-                  const Color(0xFFE53935), // Deep red for heart rate
-                ),
-                _buildVitalCard(
-                  'Blood Pressure',
-                  _dummyData.bloodPressure.toString(),
-                  'mmHg',
-                  Icons.speed_rounded,
-                  const Color(0xFF1E88E5), // Medical blue for blood pressure
+                  const Color(0xFFE53935),
+                  _heartBeatController,
+                  'heartRate',
                 ),
                 _buildVitalCard(
                   'Temperature',
                   _dummyData.temperature.toString(),
                   '°C',
                   Icons.thermostat_rounded,
-                  const Color(0xFFFF8F00), // Warm orange for temperature
+                  const Color(0xFFFF8F00),
+                  _temperatureController,
+                  'temperature',
                 ),
                 _buildVitalCard(
                   'Oxygen Level',
                   _dummyData.oxygenLevel.toString(),
                   '%',
                   Icons.air_rounded,
-                  const Color(0xFF7B1FA2), // Deep purple for oxygen
+                  const Color(0xFF7B1FA2),
+                  _oxygenController,
+                  'oxygenLevel',
                 ),
               ],
             ),
