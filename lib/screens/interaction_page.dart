@@ -8,7 +8,7 @@ class InteractionPage extends StatefulWidget {
 }
 
 class _InteractionPageState extends State<InteractionPage> {
-  bool _isConnected = true;
+  final bool _isConnected = true;
   // Add finger state tracking
   final Map<String, bool> _activeFingers = {
     'index': false,
@@ -105,81 +105,93 @@ class _InteractionPageState extends State<InteractionPage> {
     );
   }
 
-  Widget _buildFingerMovementCard(String finger) {
+  Widget _buildFingerMovementCard(String finger, {required double cardHeight}) {
     final config = _fingerConfigs[finger.toLowerCase()]!;
     final Color fingerColor = config['color'] as Color;
     final bool isActive = _activeFingers[finger.toLowerCase()] ?? false;
 
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      child: InkWell(
-        onTap: () =>
-            _handleFingerMovement(finger.toLowerCase(), config['action']),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isActive ? fingerColor : fingerColor.withOpacity(0.2),
+    return SizedBox(
+      height: cardHeight,
+      child: Card(
+        elevation: 2,
+        margin: const EdgeInsets.symmetric(vertical: 4.0),
+        child: InkWell(
+          onTap: () =>
+              _handleFingerMovement(finger.toLowerCase(), config['action']),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: isActive ? fingerColor : fingerColor.withOpacity(0.2),
+              ),
+              borderRadius: BorderRadius.circular(12),
+              gradient: isActive
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        fingerColor.withOpacity(0.2),
+                        Colors.white,
+                      ],
+                    )
+                  : null,
             ),
-            borderRadius: BorderRadius.circular(12),
-            gradient: isActive
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      fingerColor.withOpacity(0.2),
-                      Colors.white,
-                    ],
-                  )
-                : null,
-          ),
-          child: Column(
-            children: [
-              ListTile(
-                leading: Container(
+            child: Row(
+              children: [
+                Padding(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: fingerColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: fingerColor.withOpacity(0.2),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: fingerColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: fingerColor.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Icon(
+                      config['icon'] as IconData,
+                      color: fingerColor,
+                      size: 28,
                     ),
                   ),
-                  child: Icon(
-                    config['icon'] as IconData,
-                    color: fingerColor,
-                    size: 32,
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '$finger Finger',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: isActive ? fingerColor : null,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        config['action'] as String,
+                        style: TextStyle(
+                          color: isActive
+                              ? fingerColor
+                              : fingerColor.withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        config['description'] as String,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.secondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                title: Text(
-                  '$finger Finger',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                    color: isActive ? fingerColor : null,
-                  ),
-                ),
-                subtitle: Text(
-                  config['action'] as String,
-                  style: TextStyle(
-                    color:
-                        isActive ? fingerColor : fingerColor.withOpacity(0.7),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Text(
-                  config['description'] as String,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.secondary,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -188,8 +200,11 @@ class _InteractionPageState extends State<InteractionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final cardHeight = (size.height - 300) / 3; // Dynamic card height
+
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Finger Movement Controls'),
         elevation: 2,
@@ -252,15 +267,17 @@ class _InteractionPageState extends State<InteractionPage> {
               ),
             ),
           ),
-          // Finger movement list
+          // Finger movement cards
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16.0),
-              children: [
-                _buildFingerMovementCard('Index'),
-                _buildFingerMovementCard('Middle'),
-                _buildFingerMovementCard('Ring'),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                children: [
+                  _buildFingerMovementCard('Index', cardHeight: cardHeight),
+                  _buildFingerMovementCard('Middle', cardHeight: cardHeight),
+                  _buildFingerMovementCard('Ring', cardHeight: cardHeight),
+                ],
+              ),
             ),
           ),
           // Emergency button

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/vital_data.dart';
-import 'dart:math' as math;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -75,7 +74,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           scale: 1.0 + controller.value * 0.2,
           child: Icon(
             icon,
-            size: 64, // Increased from 48 to 64
+            size: 80, // Increased from 64 to 80
             color: color.withOpacity(0.5 + controller.value * 0.5),
           ),
         );
@@ -90,72 +89,74 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final Color displayColor =
         isNormal ? iconColor : Theme.of(context).colorScheme.error;
 
-    return Card(
-      elevation: 3,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              displayColor.withOpacity(0.1),
-              Colors.white,
-            ],
+    return Expanded(
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24), // Increased from 20
+          side: BorderSide(
+            color: displayColor.withOpacity(0.3),
+            width: 1.5, // Slightly thicker border
           ),
-          borderRadius: BorderRadius.circular(12),
-          border: !isNormal
-              ? Border.all(
-                  color: Theme.of(context).colorScheme.error,
-                  width: 2,
-                )
-              : null,
         ),
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16), // Increased from 12 to 16
-              decoration: BoxDecoration(
-                color: displayColor.withOpacity(0.1),
-                borderRadius:
-                    BorderRadius.circular(60), // Increased from 50 to 60
-              ),
-              child: _buildAnimatedIcon(icon, displayColor, controller),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                color: displayColor.withOpacity(0.8),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: displayColor,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  unit,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: displayColor.withOpacity(0.7),
-                  ),
-                ),
+        child: Container(
+          height: 180, // Adjusted for better fit
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                displayColor.withOpacity(0.05),
+                Colors.white,
+                Colors.white,
               ],
             ),
-          ],
+            borderRadius: BorderRadius.circular(24),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildAnimatedIcon(icon, displayColor, controller),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16, // Increased from 12
+                  color: displayColor.withOpacity(0.8),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                textBaseline: TextBaseline.alphabetic,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                children: [
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 28, // Slightly reduced for better fit
+                      fontWeight: FontWeight.bold,
+                      color: displayColor,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    unit,
+                    style: TextStyle(
+                      fontSize: 14, // Increased from 10
+                      color: displayColor.withOpacity(0.7),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -200,9 +201,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final bool isSmallScreen = screenSize.height < 600;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Patient Monitoring'),
+        centerTitle: true,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.account_circle),
@@ -210,77 +216,148 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          // Implement refresh logic
-        },
-        child: ListView(
-          padding: const EdgeInsets.all(16.0),
-          children: [
-            const Text('Vitals Monitor',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            _buildEmergencyWarning(),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 0.85,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Theme.of(context).colorScheme.primary.withOpacity(0.05),
+              Colors.white,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(12, isSmallScreen ? 8 : 16, 12, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildVitalCard(
-                  'Heart Rate',
-                  _dummyData.heartRate.toString(),
-                  'bpm',
-                  Icons.favorite_rounded,
-                  const Color(0xFFE53935),
-                  _heartBeatController,
-                  'heartRate',
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: isSmallScreen ? 8 : 16,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.monitor_heart_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: isSmallScreen ? 24 : 32,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Vital Signs Monitor',
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 20 : 24,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                _buildVitalCard(
-                  'Temperature',
-                  _dummyData.temperature.toString(),
-                  '°C',
-                  Icons.thermostat_rounded,
-                  const Color(0xFFFF8F00),
-                  _temperatureController,
-                  'temperature',
+                _buildEmergencyWarning(),
+                SizedBox(height: isSmallScreen ? 12 : 20),
+                // Vital signs row
+                Row(
+                  children: [
+                    _buildVitalCard(
+                      'Heart Rate',
+                      _dummyData.heartRate.toString(),
+                      'bpm',
+                      Icons.favorite_rounded,
+                      const Color(0xFFE53935),
+                      _heartBeatController,
+                      'heartRate',
+                    ),
+                    const SizedBox(width: 8),
+                    _buildVitalCard(
+                      'Temperature',
+                      _dummyData.temperature.toString(),
+                      '°C',
+                      Icons.thermostat_rounded,
+                      const Color(0xFFFF8F00),
+                      _temperatureController,
+                      'temperature',
+                    ),
+                    const SizedBox(width: 8),
+                    _buildVitalCard(
+                      'Oxygen',
+                      _dummyData.oxygenLevel.toString(),
+                      '%',
+                      Icons.air_rounded,
+                      const Color(0xFF7B1FA2),
+                      _oxygenController,
+                      'oxygenLevel',
+                    ),
+                  ],
                 ),
-                _buildVitalCard(
-                  'Oxygen Level',
-                  _dummyData.oxygenLevel.toString(),
-                  '%',
-                  Icons.air_rounded,
-                  const Color(0xFF7B1FA2),
-                  _oxygenController,
-                  'oxygenLevel',
+                SizedBox(height: isSmallScreen ? 12 : 20),
+                // Movement status card with improved design
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20), // Increased padding
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(
+                            Icons.accessibility_new_rounded,
+                            size: 40, // Increased from 28
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Movement Status',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 18, // Increased from 14
+                              ),
+                            ),
+                            Text(
+                              _dummyData.movementStatus,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.secondary,
+                                fontSize: 16, // Increased from 13
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
+                const Spacer(), // Added to push content to the top
               ],
             ),
-            const SizedBox(height: 20),
-            Card(
-              child: ListTile(
-                leading: Icon(
-                  Icons.accessibility_new_rounded,
-                  size: 32,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                title: const Text('Movement Status'),
-                subtitle: Text(_dummyData.movementStatus),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text('Emergency Alerts',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            // Add emergency alerts list here
-          ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.pushNamed(context, '/interaction');
         },
-        child: const Icon(Icons.gesture),
+        icon: const Icon(Icons.gesture),
+        label: const Text('Interaction'),
+        elevation: 4,
       ),
     );
   }
