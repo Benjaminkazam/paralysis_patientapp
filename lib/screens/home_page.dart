@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import '../models/vital_data.dart';
+import 'package:provider/provider.dart';
+import 'dart:async';
+import '../providers/health_provider.dart';
+import '../models/health_data_model.dart';
+import '../services/supabase_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,13 +16,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late final AnimationController _heartBeatController;
   late final AnimationController _temperatureController;
   late final AnimationController _oxygenController;
-
-  final VitalData _dummyData = VitalData(
-    heartRate: 75,
-    temperature: 37,
-    oxygenLevel: 98,
-    movementStatus: "Stable",
-  );
+  Timer? _refreshTimer;
 
   // Add vital sign thresholds
   static const Map<String, Map<String, double>> _vitalThresholds = {
@@ -32,10 +30,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return value >= threshold['min']! && value <= threshold['max']!;
   }
 
-  bool get _isEmergencyState {
-    return !_isVitalSignNormal('heartRate', _dummyData.heartRate) &&
-        !_isVitalSignNormal('temperature', _dummyData.temperature) &&
-        !_isVitalSignNormal('oxygenLevel', _dummyData.oxygenLevel);
+  bool _isEmergencyState(HealthDataModel? healthData) {
+    if (healthData == null) return false;
+    return !_isVitalSignNormal('heartRate', healthData.heartRate) &&
+        !_isVitalSignNormal('temperature', healthData.temperature) &&
+        !_isVitalSignNormal('oxygenLevel', healthData.spo2);
   }
 
   @override
@@ -55,6 +54,28 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       duration: const Duration(seconds: 3),
       vsync: this,
     )..repeat();
+
+    _initializeHealthData();
+    _startAutoRefresh();
+  }
+
+  void _startAutoRefresh() {
+    // Refresh every 5 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (mounted) {
+        _initializeHealthData();
+      }
+    });
+  }
+
+  void _initializeHealthData() {
+    Future.microtask(() async {
+      final provider = Provider.of<HealthProvider>(context, listen: false);
+      // First load the data
+      await provider.loadHealthData(SupabaseService.patientId);
+      // Then start the stream
+      provider.startHealthDataStream(SupabaseService.patientId);
+    });
   }
 
   @override
@@ -62,6 +83,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _heartBeatController.dispose();
     _temperatureController.dispose();
     _oxygenController.dispose();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -74,7 +96,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           scale: 1.0 + controller.value * 0.2,
           child: Icon(
             icon,
-            size: 80, // Increased from 64 to 80
+            size: 80,
             color: color.withOpacity(0.5 + controller.value * 0.5),
           ),
         );
@@ -93,14 +115,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       child: Card(
         elevation: 4,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24), // Increased from 20
+          borderRadius: BorderRadius.circular(24),
           side: BorderSide(
             color: displayColor.withOpacity(0.3),
-            width: 1.5, // Slightly thicker border
+            width: 1.5,
           ),
         ),
         child: Container(
-          height: 180, // Adjusted for better fit
+          height: 180,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -123,7 +145,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 title,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 16, // Increased from 12
+                  fontSize: 16,
                   color: displayColor.withOpacity(0.8),
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
@@ -138,7 +160,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   Text(
                     value,
                     style: TextStyle(
-                      fontSize: 28, // Slightly reduced for better fit
+                      fontSize: 28,
                       fontWeight: FontWeight.bold,
                       color: displayColor,
                       height: 1,
@@ -148,7 +170,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   Text(
                     unit,
                     style: TextStyle(
-                      fontSize: 14, // Increased from 10
+                      fontSize: 14,
                       color: displayColor.withOpacity(0.7),
                       fontWeight: FontWeight.w500,
                     ),
@@ -162,8 +184,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildEmergencyWarning() {
-    if (!_isEmergencyState) return const SizedBox.shrink();
+  Widget _buildEmergencyWarning(HealthDataModel? healthData) {
+    if (!_isEmergencyState(healthData)) return const SizedBox.shrink();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -216,140 +238,160 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ],
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.05),
-              Colors.white,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(12, isSmallScreen ? 8 : 16, 12, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: isSmallScreen ? 8 : 16,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.monitor_heart_outlined,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: isSmallScreen ? 24 : 32,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Vital Signs Monitor',
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 20 : 24,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _buildEmergencyWarning(),
-                SizedBox(height: isSmallScreen ? 12 : 20),
-                // Vital signs row
-                Row(
+      body: Consumer<HealthProvider>(
+        builder: (context, healthProvider, child) {
+          final healthData = healthProvider.latestHealthData;
+
+          if (healthProvider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                  Colors.white,
+                ],
+              ),
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding:
+                    EdgeInsets.fromLTRB(12, isSmallScreen ? 8 : 16, 12, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildVitalCard(
-                      'Heart Rate',
-                      _dummyData.heartRate.toString(),
-                      'bpm',
-                      Icons.favorite_rounded,
-                      const Color(0xFFE53935),
-                      _heartBeatController,
-                      'heartRate',
-                    ),
-                    const SizedBox(width: 8),
-                    _buildVitalCard(
-                      'Temperature',
-                      _dummyData.temperature.toString(),
-                      '°C',
-                      Icons.thermostat_rounded,
-                      const Color(0xFFFF8F00),
-                      _temperatureController,
-                      'temperature',
-                    ),
-                    const SizedBox(width: 8),
-                    _buildVitalCard(
-                      'Oxygen',
-                      _dummyData.oxygenLevel.toString(),
-                      '%',
-                      Icons.air_rounded,
-                      const Color(0xFF7B1FA2),
-                      _oxygenController,
-                      'oxygenLevel',
-                    ),
-                  ],
-                ),
-                SizedBox(height: isSmallScreen ? 12 : 20),
-                // Movement status card with improved design
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20), // Increased padding
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(
-                            Icons.accessibility_new_rounded,
-                            size: 40, // Increased from 28
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: isSmallScreen ? 8 : 16,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.monitor_heart_outlined,
                             color: Theme.of(context).colorScheme.primary,
+                            size: isSmallScreen ? 24 : 32,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Vital Signs Monitor',
+                              style: TextStyle(
+                                fontSize: isSmallScreen ? 20 : 24,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (healthProvider.error != null)
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          healthProvider.error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
                           ),
                         ),
-                        const SizedBox(width: 20),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Movement Status',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 18, // Increased from 14
-                              ),
-                            ),
-                            Text(
-                              _dummyData.movementStatus,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.secondary,
-                                fontSize: 16, // Increased from 13
-                              ),
-                            ),
-                          ],
+                      ),
+                    _buildEmergencyWarning(healthData),
+                    SizedBox(height: isSmallScreen ? 12 : 20),
+                    Row(
+                      children: [
+                        _buildVitalCard(
+                          'Heart Rate',
+                          healthData?.heartRate.toStringAsFixed(1) ?? '0',
+                          'bpm',
+                          Icons.favorite_rounded,
+                          const Color(0xFFE53935),
+                          _heartBeatController,
+                          'heartRate',
+                        ),
+                        const SizedBox(width: 8),
+                        _buildVitalCard(
+                          'Temperature',
+                          healthData?.temperature.toStringAsFixed(1) ?? '0',
+                          '°C',
+                          Icons.thermostat_rounded,
+                          const Color(0xFFFF8F00),
+                          _temperatureController,
+                          'temperature',
+                        ),
+                        const SizedBox(width: 8),
+                        _buildVitalCard(
+                          'SpO2',
+                          healthData?.spo2.toStringAsFixed(1) ?? '0',
+                          '%',
+                          Icons.air_rounded,
+                          const Color(0xFF7B1FA2),
+                          _oxygenController,
+                          'oxygenLevel',
                         ),
                       ],
                     ),
-                  ),
+                    SizedBox(height: isSmallScreen ? 12 : 20),
+                    Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Icon(
+                                Icons.accessibility_new_rounded,
+                                size: 40,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 20),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Movement Status',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                                Text(
+                                  'Stable',
+                                  style: TextStyle(
+                                    color:
+                                        Theme.of(context).colorScheme.secondary,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                  ],
                 ),
-                const Spacer(), // Added to push content to the top
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {

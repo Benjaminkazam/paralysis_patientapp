@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/gesture_provider.dart';
+import '../models/gesture_alert_model.dart';
+import '../services/supabase_service.dart';
 
 class InteractionPage extends StatefulWidget {
   const InteractionPage({super.key});
@@ -20,26 +24,39 @@ class _InteractionPageState extends State<InteractionPage> {
   // Add finger configurations
   final Map<String, Map<String, dynamic>> _fingerConfigs = {
     'index': {
-      'color': const Color(0xFF2196F3), // Blue for food
-      'icon': Icons.restaurant,
-      'action': 'Need Food and Water',
-      'description': 'Raise index finger for food or drink needs',
+      'color': const Color(0xFF2196F3), // Blue for water
+      'icon': Icons.water_drop,
+      'action': 'Need Water',
+      'gesture_type': 'water',
+      'description': 'Raise index finger for water',
     },
     'middle': {
       'color': const Color(0xFFE91E63), // Pink for medical
       'icon': Icons.medical_services,
-      'action': 'Need Nurse/Medicine',
+      'action': 'Need Medicine',
+      'gesture_type': 'medicine',
       'description': 'Raise middle finger for medical assistance',
     },
     'ring': {
-      'color': const Color(0xFF9C27B0), // Purple for assistance
+      'color': const Color(0xFF9C27B0), // Purple for bathroom
       'icon': Icons.wc,
-      'action': 'Bathroom Assistance',
+      'action': 'Need Bathroom',
+      'gesture_type': 'bathroom',
       'description': 'Raise ring finger for bathroom needs',
     },
   };
 
-  void _handleFingerMovement(String finger, String action) {
+  @override
+  void initState() {
+    super.initState();
+    // Start gesture alert stream
+    Future.microtask(() {
+      final provider = context.read<GestureProvider>();
+      provider.startGestureAlertStream(SupabaseService.patientId);
+    });
+  }
+
+  void _handleFingerMovement(String finger, String gestureType) {
     setState(() {
       _activeFingers[finger] = true;
     });
@@ -53,12 +70,22 @@ class _InteractionPageState extends State<InteractionPage> {
         'Multiple finger movements detected!\nTreating as emergency signal.',
         true,
       );
+      // Create emergency gesture alert
+      context.read<GestureProvider>().createGestureAlert(
+            userId: SupabaseService.patientId,
+            gestureType: 'emergency',
+          );
     } else {
       _showAlert(
         'Action Detected',
-        'Patient moved: $finger\nRequested: $action',
+        'Patient moved: $finger\nRequested: ${_fingerConfigs[finger]?['action']}',
         false,
       );
+      // Create normal gesture alert
+      context.read<GestureProvider>().createGestureAlert(
+            userId: SupabaseService.patientId,
+            gestureType: gestureType,
+          );
     }
 
     // Reset finger state after delay
@@ -116,8 +143,8 @@ class _InteractionPageState extends State<InteractionPage> {
         elevation: 2,
         margin: const EdgeInsets.symmetric(vertical: 4.0),
         child: InkWell(
-          onTap: () =>
-              _handleFingerMovement(finger.toLowerCase(), config['action']),
+          onTap: () => _handleFingerMovement(
+              finger.toLowerCase(), config['gesture_type'] as String),
           child: Container(
             decoration: BoxDecoration(
               border: Border.all(
@@ -209,106 +236,144 @@ class _InteractionPageState extends State<InteractionPage> {
         title: const Text('Finger Movement Controls'),
         elevation: 2,
       ),
-      body: Column(
-        children: [
-          // Connection status container
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            color: _isConnected
-                ? const Color(0xFFE8F5E9)
-                : const Color(0xFFFFEBEE),
-            child: Row(
-              children: [
-                Icon(
-                  _isConnected ? Icons.wifi : Icons.wifi_off,
-                  color: _isConnected
-                      ? const Color(0xFF43A047)
-                      : const Color(0xFFD32F2F),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _isConnected ? 'Sensor Connected' : 'Sensor Disconnected',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ),
-          // Instructions text
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.error.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.error,
+      body: Consumer<GestureProvider>(
+        builder: (context, gestureProvider, child) {
+          return Column(
+            children: [
+              // Connection status container
+              Container(
+                padding: const EdgeInsets.all(16.0),
+                color: _isConnected
+                    ? const Color(0xFFE8F5E9)
+                    : const Color(0xFFFFEBEE),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isConnected ? Icons.wifi : Icons.wifi_off,
+                      color: _isConnected
+                          ? const Color(0xFF43A047)
+                          : const Color(0xFFD32F2F),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isConnected ? 'Sensor Connected' : 'Sensor Disconnected',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const Spacer(),
+                    if (gestureProvider.pendingAlertsCount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.error,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${gestureProvider.pendingAlertsCount} pending',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.warning_rounded,
-                    color: Theme.of(context).colorScheme.error,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'EMERGENCY MODE activates automatically when multiple fingers are raised!',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+              // Display error if any
+              if (gestureProvider.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    gestureProvider.error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          // Finger movement cards
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                children: [
-                  _buildFingerMovementCard('Index', cardHeight: cardHeight),
-                  _buildFingerMovementCard('Middle', cardHeight: cardHeight),
-                  _buildFingerMovementCard('Ring', cardHeight: cardHeight),
-                ],
-              ),
-            ),
-          ),
-          // Emergency button
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ElevatedButton(
-              onPressed: () {
-                _showAlert(
-                  'Emergency Alert',
-                  'Emergency signal received from patient!\nImmediate assistance required.',
-                  true,
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-                minimumSize: const Size(double.infinity, 60),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.warning_rounded, size: 24),
-                  SizedBox(width: 8),
-                  Text(
-                    'EMERGENCY',
-                    style: TextStyle(fontSize: 24, color: Colors.white),
+                ),
+              // Instructions text
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
-                ],
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_rounded,
+                        color: Theme.of(context).colorScheme.error,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'EMERGENCY MODE activates automatically when multiple fingers are raised!',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+              // Finger movement cards
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    children: [
+                      _buildFingerMovementCard('Index', cardHeight: cardHeight),
+                      _buildFingerMovementCard('Middle',
+                          cardHeight: cardHeight),
+                      _buildFingerMovementCard('Ring', cardHeight: cardHeight),
+                    ],
+                  ),
+                ),
+              ),
+              // Emergency button
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Create emergency alert
+                    context.read<GestureProvider>().createGestureAlert(
+                          userId: SupabaseService.patientId,
+                          gestureType: 'emergency',
+                        );
+                    _showAlert(
+                      'Emergency Alert',
+                      'Emergency signal received from patient!\nImmediate assistance required.',
+                      true,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    minimumSize: const Size(double.infinity, 60),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.warning_rounded, size: 24),
+                      SizedBox(width: 8),
+                      Text(
+                        'EMERGENCY',
+                        style: TextStyle(fontSize: 24, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
