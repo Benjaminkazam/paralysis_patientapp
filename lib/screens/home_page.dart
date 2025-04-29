@@ -16,20 +16,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final bool _isConnected = true;
   late final SupabaseClient _client;
   final String userId = '4a7d3f88-29c1-4b2a-bc49-9cf7f1234567';
-  Timer? _healthDataTimer;
+  DateTime? _lastProcessedGesture;
 
   // Vital signs
   String _heartRate = '0';
   String _temperature = '0';
   String _spo2 = '0';
-
-  // Add finger state tracking
-  final Map<String, bool> _activeFingers = {
-    'index': false,
-    'middle': false,
-    'ring': false,
-    'pinky': false,
-  };
+  String movementStatus = 'Stable';
 
   // Add finger configurations
   final Map<String, Map<String, dynamic>> _fingerConfigs = {
@@ -77,23 +70,87 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _initSupabase();
   }
 
-  void _initSupabase() {
+  void _initSupabase() async {
     _client = Supabase.instance.client;
+
+    // Get and process latest gesture
+    try {
+      final latestGesture = await _client
+          .from('gesture_alerts')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .single();
+
+      if (latestGesture != null) {
+        _processGestureAlert(latestGesture);
+      }
+    } catch (e) {
+      print('Error fetching latest gesture: $e');
+    }
+
     _startHealthDataStream();
     _startGestureStream();
   }
 
-  void _startHealthDataStream() {
-    // Initial fetch
-    _fetchLatestHealthData();
+  void _processGestureAlert(Map<String, dynamic> gestureData) {
+    if (gestureData['gesture_type'] == null ||
+        gestureData['created_at'] == null) return;
 
-    // Real-time subscription
+    movementStatus = gestureData['gesture_type'] as String;
+
+    final timestamp = DateTime.parse(gestureData['created_at']);
+    final gestureType = gestureData['gesture_type'] as String;
+
+    String message = '';
+    if (gestureType == 'water/food') {
+      message = 'Patient needs water or food';
+      _showAlert('Gesture Alert', message, gestureType == 'emergency');
+    } else if (gestureType == 'medicine') {
+      message = 'Patient needs medicine';
+      _showAlert('Gesture Alert', message, gestureType == 'emergency');
+    } else if (gestureType == 'bathroom') {
+      message = 'Patient needs to use the bathroom';
+      _showAlert('Gesture Alert', message, gestureType == 'emergency');
+    } else if (gestureType == 'emergency') {
+      message = 'Emergency alert!';
+      _showAlert('Gesture Alert', message, gestureType == 'emergency');
+    }
+
+    _lastProcessedGesture = timestamp;
+  }
+
+  void _startHealthDataStream() async {
+    // Get initial health data
+    try {
+      final initialData = await _client
+          .from('health_data')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .single();
+
+      if (initialData != null) {
+        setState(() {
+          _heartRate = initialData['heart_rate'].toString();
+          _temperature = initialData['temperature'].toString();
+          _spo2 = initialData['spo2'].toString();
+        });
+      }
+    } catch (e) {
+      print('Error fetching initial health data: $e');
+    }
+
+    // Start real-time stream
     _client
         .from('health_data')
-        .stream(primaryKey: ['id'])
+        .stream(primaryKey: ['id', 'created_at'])
         .eq('user_id', userId)
         .order('created_at', ascending: false)
         .limit(1)
+        .map((maps) => maps)
         .listen((data) {
           if (data.isNotEmpty) {
             setState(() {
@@ -103,57 +160,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             });
           }
         });
-
-    // Periodic refresh
-    _healthDataTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _fetchLatestHealthData();
-    });
-  }
-
-  void _fetchLatestHealthData() async {
-    try {
-      final response = await _client
-          .from('health_data')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .single();
-
-      if (response != null) {
-        setState(() {
-          _heartRate = response['heart_rate'].toString();
-          _temperature = response['temperature'].toString();
-          _spo2 = response['spo2'].toString();
-        });
-      }
-    } catch (e) {
-      print('Error fetching health data: $e');
-    }
   }
 
   void _startGestureStream() {
     _client
         .from('gesture_alerts')
-        .stream(primaryKey: ['id'])
+        .stream(primaryKey: ['id', 'created_at'])
         .eq('user_id', userId)
         .order('created_at', ascending: false)
+        .limit(1)
         .listen((data) {
-          if (data.isNotEmpty && data[0]['gesture_type'] != null) {
-            final gestureType = data[0]['gesture_type'] as String;
-            String message = '';
-            if (gestureType == 'water/food') {
-              message = 'Patient needs water or food';
-            } else if (gestureType == 'medicine') {
-              message = 'Patient needs medicine';
-            } else if (gestureType == 'bathroom') {
-              message = 'Patient needs to use the bathroom';
-            } else if (gestureType == 'emergency') {
-              message = 'Emergency alert!';
-            } else {
-              message = 'Unknown gesture detected';
-            }
-            _showAlert('Gesture Alert', message, gestureType == 'emergency');
+          if (data.isNotEmpty) {
+            _processGestureAlert(data[0]);
           }
         });
   }
@@ -163,7 +181,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _heartBeatController.dispose();
     _temperatureController.dispose();
     _oxygenController.dispose();
-    _healthDataTimer?.cancel();
     super.dispose();
   }
 
@@ -259,43 +276,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  void _handleFingerMovement(String finger, String gestureType) {
-    setState(() {
-      _activeFingers[finger] = true;
-    });
-
-    // Check if multiple fingers are active
-    int activeCount = _activeFingers.values.where((active) => active).length;
-
-    if (activeCount > 1) {
-      _showAlert(
-        'Emergency Alert',
-        'Multiple finger movements detected!\nTreating as emergency signal.',
-        true,
-      );
-    } else {
-      _showAlert(
-        'Action Detected',
-        'Patient moved: $finger\nRequested: ${_fingerConfigs[finger]?['action']}',
-        false,
-      );
-    }
-
-    // Reset finger state after delay
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _activeFingers[finger] = false;
-        });
-      }
-    });
-  }
-
   void _showAlert(String title, String message, bool isEmergency) {
     if (!mounted) return;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text(
@@ -330,88 +317,69 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget _buildFingerMovementCard(String finger,
       {required Map<String, dynamic> config}) {
     final Color fingerColor = config['color'] as Color;
-    final bool isActive = _activeFingers[finger.toLowerCase()] ?? false;
 
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 4.0),
-      child: InkWell(
-        onTap: () => _handleFingerMovement(
-            finger.toLowerCase(), config['gesture_type'] as String),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isActive ? fingerColor : fingerColor.withOpacity(0.2),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: fingerColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: fingerColor.withOpacity(0.2),
+                  ),
+                ),
+                child: Icon(
+                  config['icon'] as IconData,
+                  color: fingerColor,
+                  size: 28,
+                ),
+              ),
             ),
-            borderRadius: BorderRadius.circular(12),
-            gradient: isActive
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      fingerColor.withOpacity(0.2),
-                      Colors.white,
-                    ],
-                  )
-                : null,
-          ),
-          child: Row(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: fingerColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: fingerColor.withOpacity(0.2),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '$finger Finger',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: fingerColor,
                     ),
                   ),
-                  child: Icon(
-                    config['icon'] as IconData,
-                    color: fingerColor,
-                    size: 28,
+                  const SizedBox(height: 4),
+                  Text(
+                    config['action'] as String,
+                    style: TextStyle(
+                      color: fingerColor.withOpacity(0.7),
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                    ),
                   ),
-                ),
+                  Text(
+                    config['description'] as String,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.secondary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
               ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '$finger Finger',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                        color: isActive ? fingerColor : null,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      config['action'] as String,
-                      style: TextStyle(
-                        color: isActive
-                            ? fingerColor
-                            : fingerColor.withOpacity(0.7),
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      config['description'] as String,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.secondary,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -565,7 +533,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               ),
                             ),
                             Text(
-                              'Stable',
+                              movementStatus,
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.secondary,
                                 fontSize: 16,
@@ -585,33 +553,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       config: entry.value,
                     );
                   }).toList(),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      _showAlert(
-                        'Emergency Alert',
-                        'Emergency signal received from patient!\nImmediate assistance required.',
-                        true,
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.error,
-                      minimumSize: const Size(double.infinity, 60),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.warning_rounded, size: 24),
-                        SizedBox(width: 8),
-                        Text(
-                          'EMERGENCY',
-                          style: TextStyle(fontSize: 24, color: Colors.white),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
                 const SizedBox(height: 60), // Space for bottom sheet
               ],
