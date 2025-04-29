@@ -86,12 +86,14 @@ class SupabaseService {
     required String userId,
     required String gestureType,
     required bool alertStatus,
+    required DateTime createdAt,
   }) async {
     await _client
         .from('gesture_alerts')
         .update({'alert_status': alertStatus})
         .eq('user_id', userId)
-        .eq('gesture_type', gestureType);
+        .eq('gesture_type', gestureType)
+        .eq('created_at', createdAt.toIso8601String());
   }
 
   // Emergency Notification Methods
