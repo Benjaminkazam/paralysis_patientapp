@@ -26,26 +26,26 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // Add finger configurations
   final Map<String, Map<String, dynamic>> _fingerConfigs = {
-    'index': {
+    'Middle': {
       'color': const Color(0xFF2196F3),
       'icon': Icons.water_drop,
       'action': 'Need Water/Food',
       'gesture_type': 'water/food',
-      'description': 'Raise index finger for water/food',
+      'description': 'Raise Middle finger for water/food',
     },
-    'middle': {
+    'Ring': {
       'color': const Color(0xFFE91E63),
       'icon': Icons.medical_services,
       'action': 'Need Medicine',
       'gesture_type': 'medicine',
-      'description': 'Raise middle finger for medical assistance',
+      'description': 'Raise Ring finger for medical assistance',
     },
-    'ring': {
+    'Pinky': {
       'color': const Color(0xFF9C27B0),
       'icon': Icons.wc,
       'action': 'Need Bathroom',
       'gesture_type': 'bathroom',
-      'description': 'Raise ring finger for bathroom needs',
+      'description': 'Raise Pinky finger for bathroom needs',
     },
   };
 
@@ -408,14 +408,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         child: Row(
           children: [
             Icon(
-              _isConnected ? Icons.wifi : Icons.wifi_off,
+              _isConnected ? Icons.health_and_safety : Icons.health_and_safety,
               color: _isConnected
                   ? const Color(0xFF43A047)
                   : const Color(0xFFD32F2F),
             ),
             const SizedBox(width: 8),
             Text(
-              _isConnected ? 'Sensor Connected' : 'Sensor Disconnected',
+              _isConnected ? 'Room Number: 12 ' : 'Room Number: 12 (Offline)',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             const Spacer(),
