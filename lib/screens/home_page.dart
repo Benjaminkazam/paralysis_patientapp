@@ -106,14 +106,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     String message = '';
     if (gestureType == 'water/food') {
       message = 'Patient needs water or food';
+      movementStatus = 'Water/Food Alert';
       _showAlert('Gesture Alert', message, gestureType == 'emergency');
     } else if (gestureType == 'medicine') {
       message = 'Patient needs medicine';
+      movementStatus = 'Medicine Alert';
       _showAlert('Gesture Alert', message, gestureType == 'emergency');
     } else if (gestureType == 'bathroom') {
+      movementStatus = 'Bathroom Alert';
       message = 'Patient needs to use the bathroom';
       _showAlert('Gesture Alert', message, gestureType == 'emergency');
     } else if (gestureType == 'emergency') {
+      movementStatus = 'Emergency Alert';
       message = 'Emergency alert!';
       _showAlert('Gesture Alert', message, gestureType == 'emergency');
     }
@@ -171,7 +175,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         .limit(1)
         .listen((data) {
           if (data.isNotEmpty) {
-            _processGestureAlert(data[0]);
+            setState(() {
+              _processGestureAlert(data[0]);
+            });
           }
         });
   }
@@ -392,9 +398,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Patient Monitoring'),
+        title: Image.asset(
+          'assets/images/IMG_8064.PNG',
+          height: 180,
+          fit: BoxFit.contain,
+        ),
         centerTitle: true,
         elevation: 0,
+        backgroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.account_circle),
